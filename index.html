@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>反應遊戲</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="反應遊戲">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body {
+            background: #000;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            overflow: hidden;
+            user-select: none;
+            width: 100%;
+            height: 100%;
+            position: fixed;
+            touch-action: none;
+        }
+
+        #homeScreen {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+
+        #homeScreen.hidden { display: none; }
+
+        #homeBestScore {
+            font-size: 20px;
+            color: #fff;
+            letter-spacing: 3px;
+            margin-bottom: 20px;
+        }
+
+        #startBtn {
+            padding: 16px 64px;
+            font-size: 22px;
+            font-weight: bold;
+            background: #fff;
+            color: #000;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            letter-spacing: 4px;
+        }
+
+        #startBtn:active { transform: scale(0.97); }
+
+        #gameScreen {
+            position: fixed;
+            inset: 0;
+            display: none;
+        }
+
+        #gameScreen.active { display: block; }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #hudDisplay {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        #livesDisplay {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 14px;
+        }
+
+        #scoreDisplay {
+            font-size: 40px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .life-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #fff;
+        }
+
+        .life-dot.lost { background: #000; }
+
+        #gameOverScreen {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 300;
+        }
+
+        #gameOverScreen.show { display: flex; }
+
+        #gameOverScreen h1 {
+            font-size: 42px;
+            color: #ff2222;
+            margin-bottom: 32px;
+            letter-spacing: 2px;
+        }
+
+        #gameOverScreen .label {
+            font-size: 14px;
+            color: #666;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+
+        #gameOverScreen .score-val {
+            font-size: 56px;
+            font-weight: bold;
+            color: #fff;
+            margin-bottom: 24px;
+        }
+
+        #gameOverScreen .best-val {
+            font-size: 16px;
+            color: #888;
+            margin-bottom: 48px;
+            letter-spacing: 2px;
+        }
+
+        #homeBtn {
+            padding: 14px 56px;
+            font-size: 18px;
+            font-weight: bold;
+            background: #fff;
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            letter-spacing: 2px;
+        }
+
+        #homeBtn:active { transform: scale(0.97); }
+
+        #langToggle {
+            font-size: 13px;
+            color: #000;
+            background: #fff;
+            border-radius: 8px;
+            padding: 6px 16px;
+            cursor: pointer;
+            letter-spacing: 1px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        #rulesBlock {
+            margin-bottom: 40px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .rule-item {
+            font-size: 14px;
+            color: #888;
+            letter-spacing: 0.5px;
+            line-height: 1.5;
+        }
+
+        .rule-item span {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        #rulesBlock hr {
+            border: none;
+            border-top: 1px solid #222;
+            margin: 4px 0;
+        }
+    </style>
+</head>
+<body>
+
+<div id="homeScreen">
+    <div id="langToggle">中文 / EN</div>
+    <div id="rulesBlock">
+        <div class="rule-item"><span class="zh">白光</span><span class="en" style="display:none">White light</span> → <span class="zh">往對應方向滑動</span><span class="en" style="display:none">Swipe in the matching direction</span></div>
+        <div class="rule-item"><span class="zh">紅光</span><span class="en" style="display:none">Red light</span> → <span class="zh">不要動</span><span class="en" style="display:none">Don't move</span></div>
+        <hr>
+        <div class="rule-item"><span class="zh">超過 0.5 秒未反應視為失敗</span><span class="en" style="display:none">No response within 0.5s counts as a miss</span></div>
+        <div class="rule-item"><span class="zh">共 3 條生命，用完遊戲結束</span><span class="en" style="display:none">3 lives total, game over when all are lost</span></div>
+    </div>
+    <div id="homeBestScore">0 PT</div>
+    <button id="startBtn">START</button>
+</div>
+
+<div id="gameScreen">
+    <canvas id="gameCanvas"></canvas>
+    <div id="hudDisplay">
+        <div id="livesDisplay">
+            <div class="life-dot" id="life0"></div>
+            <div class="life-dot" id="life1"></div>
+            <div class="life-dot" id="life2"></div>
+        </div>
+        <div id="scoreDisplay">0</div>
+    </div>
+</div>
+
+<div id="gameOverScreen">
+    <h1>GAME OVER</h1>
+    <div class="label">SCORE</div>
+    <div class="score-val" id="finalScore">0</div>
+    <div class="best-val" id="finalBest">BEST: 0 PT</div>
+    <button id="homeBtn">HOME</button>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    const homeScreen = document.getElementById('homeScreen');
+    const gameScreen = document.getElementById('gameScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const homeBestScore = document.getElementById('homeBestScore');
+
+    let state = {};
+    let animFrameId = null;
+
+    function getBest() {
+        return parseInt(localStorage.getItem('bestScore') || '0');
+    }
+
+    function saveBest(score) {
+        if (score > getBest()) localStorage.setItem('bestScore', score);
+    }
+
+    function showHome() {
+        homeBestScore.textContent = getBest() + ' PT';
+        homeScreen.classList.remove('hidden');
+        gameScreen.classList.remove('active');
+        gameOverScreen.classList.remove('show');
+    }
+
+    function startGame() {
+        homeScreen.classList.add('hidden');
+        gameScreen.classList.add('active');
+        gameOverScreen.classList.remove('show');
+
+        state = {
+            score: 0,
+            lives: 3,
+            dead: false,
+            light: null,
+            nextLightAt: Date.now() + randomDelay(),
+            lightShownAt: 0,
+            comboCorrect: 0,
+            comboWrong: 0,
+            bonusDelay: 0
+        };
+
+        updateScore();
+        updateLives();
+
+        if (animFrameId) cancelAnimationFrame(animFrameId);
+        loop();
+    }
+
+    function randomDelay() {
+        return 200 + Math.random() * 2300;
+    }
+
+    function nextDelay(immediate) {
+        if (immediate) return 0;
+        return randomDelay() + state.bonusDelay;
+    }
+
+    function spawnLight() {
+        const sides = ['top', 'bottom', 'left', 'right'];
+        const side = sides[Math.floor(Math.random() * 4)];
+        const isRed = Math.random() < 0.35;
+        state.light = { side, isRed, shownAt: Date.now() };
+        state.lightShownAt = Date.now();
+    }
+
+    function clearLight(immediate) {
+        state.light = null;
+        state.lightShownAt = 0;
+        state.nextLightAt = Date.now() + nextDelay(immediate);
+    }
+
+    function loseLife() {
+        state.lives--;
+        clearLight(false);
+        updateLives();
+        flashRed();
+        if (state.lives <= 0) {
+            setTimeout(endGame, 300);
+        }
+    }
+
+    function endGame() {
+        state.dead = true;
+        saveBest(state.score);
+        document.getElementById('finalScore').textContent = state.score;
+        document.getElementById('finalBest').textContent = 'BEST: ' + getBest() + ' PT';
+        gameOverScreen.classList.add('show');
+    }
+
+    function updateScore() {
+        scoreDisplay.textContent = state.score;
+    }
+
+    function updateLives() {
+        for (let i = 0; i < 3; i++) {
+            const dot = document.getElementById('life' + i);
+            dot.classList.toggle('lost', i >= state.lives);
+        }
+    }
+
+    function flashRed() {
+        ctx.save();
+        ctx.fillStyle = 'rgba(255,0,0,0.25)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+    }
+
+    function drawLight(light) {
+        const elapsed = Date.now() - light.shownAt;
+        const duration = light.isRed ? 1000 : 500;
+        const alpha = Math.max(0, 1 - elapsed / duration);
+        const color = light.isRed ? [255, 0, 0] : [255, 255, 255];
+        const [r, g, b] = color;
+
+        const blockW = 80;
+        const blockH = 80;
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        let bx, by, bw, bh, gx, gy;
+
+        switch (light.side) {
+            case 'top':
+                bx = cx - blockW / 2; by = 0; bw = blockW; bh = blockH;
+                gx = cx; gy = 0; break;
+            case 'bottom':
+                bx = cx - blockW / 2; by = canvas.height - blockH; bw = blockW; bh = blockH;
+                gx = cx; gy = canvas.height; break;
+            case 'left':
+                bx = 0; by = cy - blockH / 2; bw = blockH; bh = blockW;
+                gx = 0; gy = cy; break;
+            case 'right':
+                bx = canvas.width - blockH; by = cy - blockH / 2; bw = blockH; bh = blockW;
+                gx = canvas.width; gy = cy; break;
+        }
+
+        const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, 160);
+        grad.addColorStop(0, `rgba(${r},${g},${b},${0.35 * alpha})`);
+        grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(bx - 160, by - 160, bw + 320, bh + 320);
+
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.globalAlpha = 1;
+    }
+
+    function loop() {
+        if (state.dead) return;
+
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        if (!state.light && Date.now() >= state.nextLightAt) {
+            spawnLight();
+        }
+
+        if (state.light) {
+            const elapsed = Date.now() - state.lightShownAt;
+            const timeout = state.light.isRed ? 1000 : 500;
+            if (elapsed > timeout) {
+                if (!state.light.isRed) {
+                    loseLife();
+                } else {
+                    clearLight();
+                }
+            } else {
+                drawLight(state.light);
+            }
+        }
+
+        animFrameId = requestAnimationFrame(loop);
+    }
+
+    // 滑動處理
+    let swipeStart = null;
+
+    function onStart(x, y) {
+        swipeStart = { x, y };
+    }
+
+    function onEnd(x, y) {
+        if (!swipeStart || state.dead || !state.light) return;
+
+        const dx = x - swipeStart.x;
+        const dy = y - swipeStart.y;
+        swipeStart = null;
+
+        if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+
+        let dir;
+        if (Math.abs(dx) > Math.abs(dy)) {
+            dir = dx > 0 ? 'right' : 'left';
+        } else {
+            dir = dy > 0 ? 'bottom' : 'top';
+        }
+
+        const light = state.light;
+
+        if (light.isRed) {
+            loseLife();
+            return;
+        }
+
+        if (dir === light.side) {
+            // 白光答對
+            state.comboWrong = 0;
+            state.comboCorrect++;
+
+            if (state.comboCorrect >= 3) {
+                // 第3次起每答對一次 +0.5秒
+                state.bonusDelay = Math.min(state.bonusDelay + 500, 3000);
+
+                // 累積拉長滿3次（第3、4、5次）後瞬間加快並 reset
+                if (state.comboCorrect >= 5) {
+                    state.bonusDelay = 0;
+                    state.comboCorrect = 0;
+                    state.score++;
+                    updateScore();
+                    clearLight(true); // 立刻出現
+                    return;
+                }
+            }
+
+            state.score++;
+            updateScore();
+            clearLight(false);
+        } else {
+            // 白光答錯
+            state.comboCorrect = 0;
+            state.comboWrong++;
+            state.bonusDelay = Math.max(state.bonusDelay - 100, -1700); // 最短0.3s = 200 + (-1700) + 2300*random，取最小值
+
+            // 連錯達到下限後 reset
+            if (state.bonusDelay <= -1700) {
+                state.bonusDelay = 0;
+                state.comboWrong = 0;
+            }
+
+            loseLife();
+        }
+    }
+
+    canvas.addEventListener('touchstart', e => {
+        e.preventDefault();
+        onStart(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', e => {
+        e.preventDefault();
+        onEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
+    canvas.addEventListener('mousedown', e => onStart(e.clientX, e.clientY));
+    canvas.addEventListener('mouseup', e => onEnd(e.clientX, e.clientY));
+
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('homeBtn').addEventListener('click', showHome);
+
+    let lang = 'zh';
+    document.getElementById('langToggle').addEventListener('click', () => {
+        lang = lang === 'zh' ? 'en' : 'zh';
+        document.querySelectorAll('.zh').forEach(el => el.style.display = lang === 'zh' ? '' : 'none');
+        document.querySelectorAll('.en').forEach(el => el.style.display = lang === 'en' ? '' : 'none');
+    });
+
+    showHome();
+
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js');
+    }
+</script>
+</body>
+</html>
